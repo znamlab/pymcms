@@ -1,11 +1,10 @@
 """Generic function to interface with flexilims"""
-import math
+import yaml
 import re
 import requests
 from requests.exceptions import InvalidURL
 import warnings
-from requests.auth import HTTPBasicAuth
-import json
+
 
 BASE_URL = "https://crick-uat.colonymanagement.org/api/"
 SPECIAL_CHARACTERS = re.compile(r'[\',\.@"+=\-!#$%^&*<>?/\|}{~:]')
@@ -70,34 +69,49 @@ class McmsSession(object):
             # match the returned value
             # no need to check ID since it's the first to be used
             if (name is not None) and (json["name"] != name):
-                raise MCMSError(f"id {animal_id} does not match name {name}")
+                raise MCMSError(f"id `{animal_id}` does not match name `{name}`")
             if (barcode is not None) and (json["barcode"] != barcode):
                 raise MCMSError(
-                    f"id {animal_id} or name {name} do not match barcode {barcode}"
+                    f"id `{animal_id}` or name `{name}`do not match barcode `{barcode}`"
                 )
 
             return json
         handle_error(rep)
 
-    def get_procedures(self, animal_names):
-        """Get all procedures associates with a list of animals
+    def get_procedures(self, animal_names=None, animal_id=None):
+        """Get all procedures associates with animals
+
+        Given a list of animal names or a single animal ID, return all procedures
+        associated
 
         Args:
             animal_names: a list of animal names or a single animal name
+            animal_id: a single animal id
 
         Returns:
             a list of dictonaries with procedure information"""
 
-        if isinstance(animal_names, str):
-            animal_names = [animal_names]
+        if animal_id is not None and animal_names is not None:
+            raise ValueError(
+                "Only one of `animal_id` or `animal_names` can be provided"
+            )
+        if animal_id is not None:
+            rep = self.session.get(f"{self.base_url}animalprocedures/animal/{animal_id}")
+        elif animal_names is not None:
+            if isinstance(animal_names, str):
+                animal_names = [animal_names]
+            else:
+                animal_names = [str(x) for x in animal_names]
+            animal_names = ",".join(animal_names)
+            rep = self.session.post(
+                f"{self.base_url}animalprocedures",
+                data=animal_names.encode("utf-8"),
+                headers={"Content-Type": "text/plain"},
+            )
         else:
-            animal_names = [str(x) for x in animal_names]
-        animal_names = ",".join(animal_names)
-        rep = self.session.post(
-            f"{self.base_url}procedures",
-            data=animal_names.encode("utf-8"),
-            headers={"Content-Type": "text/plain"},
-        )
+            raise ValueError(
+                'At least one of "animal_id" or "animal_names" must be provided'
+            )
         if rep.ok and (rep.status_code == 200):
             return rep.json()
         handle_error(rep)
@@ -119,7 +133,10 @@ def handle_error(rep):
             + f"{rep.url.split('/')[-1]}"
         )
     if rep.status_code == 404:
-        raise InvalidURL(f"Page not found, maybe this entity doesn't exist: {rep.url}")
+        error_dict = yaml.safe_load(rep.content)
+        if error_dict["status"] != "NOT_FOUND":
+            NotImplementedError
+        raise InvalidURL(f"{error_dict['status']}: {error_dict['message']}")
 
     raise IOError("Unknown error with status code %d" % rep.status_code)
 
@@ -127,14 +144,11 @@ def handle_error(rep):
 def parse_error(error_message):
     """Parse the error message from MCMS bad request
 
-    The messages are html pages with a bold "Type", "Message" and "Description" fields
+    The messages are plain yaml
     """
     if isinstance(error_message, bytes):
         error_message = error_message.decode("utf8")
-    regexp = (
-        ".*<b>Type</b>(.*)</p><p><b>Message</b>(.*)</p><p><b>Description</b>(.*)</p>"
-    )
-    m = re.match(pattern=regexp, string=error_message)
+
     return {name: v for name, v in zip(("type", "message", "description"), m.groups())}
 
 

@@ -5,7 +5,7 @@ from pymcms import main
 TEST_ANIMAL = {
     "id": 1848463,
     "name": "BRAC7449.2a",
-    "birthDate": "18-Aug-2022",
+    "birthDate": "2022-08-18T23:00:00.000+0000",
     "barcode": "M01848463",
 }
 TEST_ANIMAL_LIST = ["PZAA16.1a", "PZAA16.1b", "PZAA16.1c"]
@@ -45,18 +45,20 @@ def test_get_animal():
     # test error handling
     with pytest.raises(main.MCMSError):
         mcms_sess.get_animal(animal_id=TEST_ANIMAL["id"], name="wrong name")
+    with pytest.raises(main.MCMSError):
+        mcms_sess.get_animal(animal_id="wrongid")
     with pytest.raises(InvalidURL):
         mcms_sess.get_animal(name="wrongid")
     with pytest.raises(InvalidURL):
-        mcms_sess.get_animal(animal_id="wrongid")
-    with pytest.raises(InvalidURL):
-        mcms_sess.get_animal(animal_id="wrongbarcode")
+        mcms_sess.get_animal(barcode="wrongbarcode")
 
 
 def test_get_procedures():
     mcms_sess = main.McmsSession(username=USER, password=PASSWORD)
+    procbyid = mcms_sess.get_procedures(animal_id=TEST_ANIMAL["id"])
     proc = mcms_sess.get_procedures(animal_names=TEST_ANIMAL["name"])
-    assert proc is not None
+    assert len(procbyid) == len(proc)
+    assert all([p in proc for p in procbyid])
     assert len(proc) > 0
     assert all([p["animal"]["name"] == TEST_ANIMAL["name"] for p in proc])
     multi_proc = mcms_sess.get_procedures(animal_names=TEST_ANIMAL_LIST)
@@ -66,3 +68,5 @@ def test_get_procedures():
     assert all([animal in animal_names for animal in TEST_ANIMAL_LIST])
     rep = mcms_sess.get_procedures(animal_names="wrongname")
     assert not rep
+    with pytest.raises(main.MCMSError):
+        rep = mcms_sess.get_procedures(animal_id="wrongid")
