@@ -96,7 +96,9 @@ class McmsSession(object):
                 "Only one of `animal_id` or `animal_names` can be provided"
             )
         if animal_id is not None:
-            rep = self.session.get(f"{self.base_url}animalprocedures/animal/{animal_id}")
+            rep = self.session.get(
+                f"{self.base_url}animalprocedures/animal/{animal_id}"
+            )
         elif animal_names is not None:
             if isinstance(animal_names, str):
                 animal_names = [animal_names]
