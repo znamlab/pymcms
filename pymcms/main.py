@@ -6,7 +6,7 @@ from requests.exceptions import InvalidURL
 import warnings
 
 
-BASE_URL = "https://crick-uat.colonymanagement.org/api/"
+BASE_URL = "https://crick.colonymanagement.org/api/"
 SPECIAL_CHARACTERS = re.compile(r'[\',\.@"+=\-!#$%^&*<>?/\|}{~:]')
 
 

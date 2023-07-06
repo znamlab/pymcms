@@ -13,7 +13,7 @@ USER = "ab8"
 try:
     from flexiznam import get_password
 
-    PASSWORD = get_password(USER, "mcms")
+    PASSWORD = get_password(username=USER, app="mcms")
 except ImportError:
     PASSWORD = None
     if PASSWORD is None:
