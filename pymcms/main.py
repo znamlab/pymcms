@@ -6,7 +6,7 @@ from requests.exceptions import InvalidURL
 import warnings
 
 
-BASE_URL = "https://crick.colonymanagement.org/api/"
+BASE_URL = "https://crick.mcms-pro.com/api/"
 SPECIAL_CHARACTERS = re.compile(r'[\',\.@"+=\-!#$%^&*<>?/\|}{~:]')
 
 
@@ -135,10 +135,7 @@ def handle_error(rep):
             + f"{rep.url.split('/')[-1]}"
         )
     if rep.status_code == 404:
-        error_dict = yaml.safe_load(rep.content)
-        if error_dict["status"] != "NOT_FOUND":
-            NotImplementedError
-        raise InvalidURL(f"{error_dict['status']}: {error_dict['message']}")
+        raise InvalidURL(rep.content)
 
     raise IOError("Unknown error with status code %d" % rep.status_code)
 
