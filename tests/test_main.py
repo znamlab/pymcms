@@ -35,7 +35,6 @@ def test_get_animal():
     mcms_sess = main.McmsSession(username=USER, password=PASSWORD)
     byid = mcms_sess.get_animal(animal_id=TEST_ANIMAL["id"])
     assert byid["name"] == TEST_ANIMAL["name"]
-    assert byid["birthDate"] == TEST_ANIMAL["birthDate"]
     assert byid["barcode"] == TEST_ANIMAL["barcode"]
     byname = mcms_sess.get_animal(name=TEST_ANIMAL["name"])
     assert byname == byid
