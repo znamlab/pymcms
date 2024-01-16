@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="pymcms",
-    version="v0.2",
+    version="v0.3",
     url="https://github.com/znamlab/pymcms",
     license="MIT",
     author="Antonin Blot",
