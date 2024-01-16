@@ -1,12 +1,1 @@
-<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="4" time="5.114" timestamp="2023-06-27T14:47:34.961823" hostname="FM70R4W0XG"><testcase classname="tests.test_main" name="test_get_token" time="0.423" /><testcase classname="tests.test_main" name="test_create_session" time="0.285" /><testcase classname="tests.test_main" name="test_get_animal" time="0.816"><failure message="AssertionError: assert '2022-08-19T0...:00.000+01:00' == '2022-08-18T23:00:00.000+0000'&#10;  - 2022-08-18T23:00:00.000+0000&#10;  ?          ^ ^^              -&#10;  + 2022-08-19T00:00:00.000+01:00&#10;  ?          ^ ^^            ++">def test_get_animal():
-        mcms_sess = main.McmsSession(username=USER, password=PASSWORD)
-        byid = mcms_sess.get_animal(animal_id=TEST_ANIMAL["id"])
-        assert byid["name"] == TEST_ANIMAL["name"]
-&gt;       assert byid["birthDate"] == TEST_ANIMAL["birthDate"]
-E       AssertionError: assert '2022-08-19T0...:00.000+01:00' == '2022-08-18T23:00:00.000+0000'
-E         - 2022-08-18T23:00:00.000+0000
-E         ?          ^ ^^              -
-E         + 2022-08-19T00:00:00.000+01:00
-E         ?          ^ ^^            ++
-
-tests/test_main.py:38: AssertionError</failure></testcase><testcase classname="tests.test_main" name="test_get_procedures" time="0.856" /></testsuite></testsuites>
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="4" time="1.613" timestamp="2023-12-02T08:55:55.163671" hostname="FM70R4W0XG"><testcase classname="tests.test_main" name="test_get_token" time="0.143" /><testcase classname="tests.test_main" name="test_create_session" time="0.106" /><testcase classname="tests.test_main" name="test_get_animal" time="0.590" /><testcase classname="tests.test_main" name="test_get_procedures" time="0.561" /></testsuite></testsuites>
