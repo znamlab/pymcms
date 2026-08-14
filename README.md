@@ -6,3 +6,14 @@ API is documented there: https://crick-uat.colonymanagement.org/api/swagger-ui/i
 
 The current version provides only access to `get_animal` and `get_procedures`
 
+## Development
+
+Install the locked development environment and run the checks with [uv](https://docs.astral.sh/uv/):
+
+```shell
+uv sync --group dev
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
+uv run pytest
+```
