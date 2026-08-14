@@ -1,22 +1,23 @@
-"""Generic function to interface with flexilims"""
-import yaml
+"""Client helpers for the MCMS API."""
+
 import re
-import requests
-from requests.exceptions import InvalidURL
 import warnings
 
+import requests
+import yaml
+from requests.exceptions import InvalidURL
 
 BASE_URL = "https://crick.mcms-pro.com/api/"
 SPECIAL_CHARACTERS = re.compile(r'[\',\.@"+=\-!#$%^&*<>?/\|}{~:]')
 
 
 class MCMSError(Exception):
-    """Error in MCMS code"""
-
-    pass
+    """Raised when the MCMS API returns an application-level error."""
 
 
-class McmsSession(object):
+class McmsSession:
+    """Authenticated session for the MCMS API."""
+
     def __init__(self, username, password, business_area=None, base_url=BASE_URL):
         self.username = username
         self.base_url = base_url
@@ -26,146 +27,137 @@ class McmsSession(object):
         self.create_session(password)
 
     def create_session(self, password):
-        """Create a session with authentication information"""
+        """Create a session with authentication information."""
         if self.session is not None:
             print("Session already exists.")
             return
 
         session = requests.Session()
-        tok = get_token(self.username, password)
-
-        session.headers.update(tok)
+        session.headers.update(get_token(self.username, password))
         self.session = session
         self.log.append("Session created for user %s" % self.username)
 
-    def get_animal(self, animal_id=None, name=None, barcode=None):
-        """Get a animal from its name, id or barcode
+    def _authenticated_session(self):
+        """Return the active HTTP session, enforcing the session invariant."""
+        if self.session is None:
+            raise RuntimeError("No MCMS session has been created.")
+        return self.session
 
-        If multiple values are provied, only the first non None value will be used.
+    def get_animal(self, animal_id=None, name=None, barcode=None):
+        """Get an animal from its name, ID, or barcode.
+
+        If multiple values are provided, only the first non-``None`` value is used.
 
         Args:
-            animal_id:  numerical id of the animal
-            name: name of the animal
-            barcode: hexadecimal barcode of the animal
+            animal_id: Numerical ID of the animal.
+            name: Name of the animal.
+            barcode: Hexadecimal barcode of the animal.
 
         Returns:
-            a dictionary with the animal information
+            A dictionary with the animal information.
         """
-
+        session = self._authenticated_session()
         if animal_id is not None:
-            rep = self.session.get(f"{self.base_url}animals/{animal_id}")
+            rep = session.get(f"{self.base_url}animals/{animal_id}")
         elif name is not None:
-            rep = self.session.get(f"{self.base_url}animals/name/{name}")
+            rep = session.get(f"{self.base_url}animals/name/{name}")
         elif barcode is not None:
-            rep = self.session.get(f"{self.base_url}animals/barcode/{barcode}")
+            rep = session.get(f"{self.base_url}animals/barcode/{barcode}")
         else:
             raise ValueError(
                 'At least one of "animal_id", "name" or "barcode" must be provided'
             )
 
-        if rep.ok and (rep.status_code == 200):
-            json = rep.json()
-            # since one can provide multiple arguments, we need to check that they do
-            # match the returned value
-            # no need to check ID since it's the first to be used
-            if (name is not None) and (json["name"] != name):
+        if rep.ok and rep.status_code == 200:
+            animal = rep.json()
+            # Multiple arguments are allowed, so check that any non-primary value
+            # matches the returned entity. The ID is always the primary lookup.
+            if name is not None and animal["name"] != name:
                 raise MCMSError(f"id `{animal_id}` does not match name `{name}`")
-            if (barcode is not None) and (json["barcode"] != barcode):
+            if barcode is not None and animal["barcode"] != barcode:
                 raise MCMSError(
-                    f"id `{animal_id}` or name `{name}`do not match barcode `{barcode}`"
+                    f"id `{animal_id}` or name `{name}` do not match barcode "
+                    f"`{barcode}`"
                 )
-
-            return json
-        handle_error(rep)
+            return animal
+        return handle_error(rep)
 
     def get_procedures(self, animal_names=None, animal_id=None):
-        """Get all procedures associates with animals
+        """Get all procedures associated with animals.
 
-        Given a list of animal names or a single animal ID, return all procedures
-        associated
+        Given a list of animal names or a single animal ID, return all associated
+        procedures.
 
         Args:
-            animal_names: a list of animal names or a single animal name
-            animal_id: a single animal id
+            animal_names: A list of animal names or a single animal name.
+            animal_id: A single animal ID.
 
         Returns:
-            a list of dictonaries with procedure information"""
-
+            A list of dictionaries with procedure information.
+        """
+        session = self._authenticated_session()
         if animal_id is not None and animal_names is not None:
             raise ValueError(
                 "Only one of `animal_id` or `animal_names` can be provided"
             )
         if animal_id is not None:
-            rep = self.session.get(
-                f"{self.base_url}animalprocedures/animal/{animal_id}"
-            )
+            rep = session.get(f"{self.base_url}animalprocedures/animal/{animal_id}")
         elif animal_names is not None:
             if isinstance(animal_names, str):
                 animal_names = [animal_names]
             else:
-                animal_names = [str(x) for x in animal_names]
-            animal_names = ",".join(animal_names)
-            rep = self.session.post(
+                animal_names = [str(name) for name in animal_names]
+            rep = session.post(
                 f"{self.base_url}animalprocedures",
-                data=animal_names.encode("utf-8"),
+                data=",".join(animal_names).encode(),
                 headers={"Content-Type": "text/plain"},
             )
         else:
             raise ValueError(
                 'At least one of "animal_id" or "animal_names" must be provided'
             )
-        if rep.ok and (rep.status_code == 200):
+        if rep.ok and rep.status_code == 200:
             return rep.json()
-        handle_error(rep)
+        return handle_error(rep)
 
 
 def handle_error(rep):
-    """handles responses that have a status code != 200"""
-    # error handling:
+    """Handle an API response whose status code is not 200."""
     if rep.ok:
         warnings.warn(
-            "Warning. Seems ok but I had an unknown status code %s" % rep.status_code
+            f"The API returned unexpected status code {rep.status_code}.",
+            stacklevel=2,
         )
-        warnings.warn("Will return the response object without interpreting it.")
-        warnings.warn("see response.json() to (hopefully) get the data.")
         return rep
     if rep.status_code == 400:
         raise MCMSError(
-            f"Error {rep.status_code}. This entity does not exists:"
-            + f"{rep.url.split('/')[-1]}"
+            f"Error {rep.status_code}. This entity does not exist:"
+            f"{rep.url.split('/')[-1]}"
         )
     if rep.status_code == 404:
         raise InvalidURL(rep.content)
 
-    raise IOError("Unknown error with status code %d" % rep.status_code)
+    raise OSError(f"Unknown error with status code {rep.status_code}")
 
 
 def parse_error(error_message):
-    """Parse the error message from MCMS bad request
-
-    The messages are plain yaml
-    """
+    """Parse the YAML message returned by an MCMS bad request."""
     if isinstance(error_message, bytes):
         error_message = error_message.decode("utf8")
-
-    return {name: v for name, v in zip(("type", "message", "description"), m.groups())}
+    return yaml.safe_load(error_message)
 
 
 def get_token(username, password, base_url=BASE_URL):
-    """Login to the database and create headers with the proper token"""
+    """Log in and return the authorization headers for an MCMS session."""
     try:
         rep = requests.post(
-            base_url + "authenticate",
-            headers=dict(Accept="*/*", username=username, password=password),
+            f"{base_url}authenticate",
+            headers={"Accept": "*/*", "username": username, "password": password},
         )
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.ConnectionError as error:
         raise requests.exceptions.ConnectionError(
-            "Cannot connect to mcms. " "Are you on the insitution network?"
-        )
-    if rep.ok:
-        token = rep.json()["token"]
-    else:
-        raise IOError("Failed to authenticate. Got an error %d" % rep.status_code)
-
-    headers = {"Authorization": "Bearer %s" % token}
-    return headers
+            "Cannot connect to MCMS. Are you on the institution network?"
+        ) from error
+    if not rep.ok:
+        raise OSError(f"Failed to authenticate. Got an error {rep.status_code}")
+    return {"Authorization": f"Bearer {rep.json()['token']}"}

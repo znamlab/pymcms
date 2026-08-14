@@ -1,5 +1,8 @@
+from unittest.mock import Mock, patch
+
 import pytest
-from requests.exceptions import InvalidURL
+from requests.exceptions import ConnectionError, InvalidURL
+
 from pymcms import main
 
 TEST_ANIMAL = {
@@ -8,64 +11,135 @@ TEST_ANIMAL = {
     "birthDate": "2022-08-18T23:00:00.000+0000",
     "barcode": "M01848463",
 }
-TEST_ANIMAL_LIST = ["PZAA16.1a", "PZAA16.1b", "PZAA16.1c"]
-USER = "ab8"
-try:
-    from flexiznam import get_password
-
-    PASSWORD = get_password(username=USER, app="mcms")
-except ImportError:
-    PASSWORD = None
-    if PASSWORD is None:
-        print("Cannot run tests without flexiznam installed and no password provided")
 
 
-def test_get_token():
-    token = main.get_token(username=USER, password=PASSWORD)
-    assert token is not None
+def response(*, status_code=200, body=None, content=b"", url="https://mcms.test/api"):
+    """Build a minimal stand-in for a ``requests.Response``."""
+    return Mock(
+        ok=200 <= status_code < 400,
+        status_code=status_code,
+        json=Mock(return_value=body),
+        content=content,
+        url=url,
+    )
 
 
-def test_create_session():
-    mcms_sess = main.McmsSession(username=USER, password=PASSWORD)
-    assert mcms_sess is not None
-    assert "Authorization" in mcms_sess.session.headers
+def session():
+    """Create an authenticated session without making a network request."""
+    with patch.object(
+        main, "get_token", return_value={"Authorization": "Bearer test-token"}
+    ):
+        return main.McmsSession("test-user", "test-password")
 
 
-def test_get_animal():
-    mcms_sess = main.McmsSession(username=USER, password=PASSWORD)
-    byid = mcms_sess.get_animal(animal_id=TEST_ANIMAL["id"])
-    assert byid["name"] == TEST_ANIMAL["name"]
-    assert byid["barcode"] == TEST_ANIMAL["barcode"]
-    byname = mcms_sess.get_animal(name=TEST_ANIMAL["name"])
-    assert byname == byid
-    bybarcode = mcms_sess.get_animal(barcode=TEST_ANIMAL["barcode"])
-    assert bybarcode == byid
+def test_get_token_returns_authorization_header():
+    api_response = response(body={"token": "test-token"})
 
-    # test error handling
-    with pytest.raises(main.MCMSError):
-        mcms_sess.get_animal(animal_id=TEST_ANIMAL["id"], name="wrong name")
-    with pytest.raises(main.MCMSError):
-        mcms_sess.get_animal(animal_id="wrongid")
+    with patch.object(main.requests, "post", return_value=api_response) as post:
+        assert main.get_token("test-user", "test-password") == {
+            "Authorization": "Bearer test-token"
+        }
+
+    post.assert_called_once_with(
+        "https://crick.mcms-pro.com/api/authenticate",
+        headers={"Accept": "*/*", "username": "test-user", "password": "test-password"},
+    )
+
+
+def test_get_token_reports_connection_errors():
+    with patch.object(main.requests, "post", side_effect=ConnectionError):
+        with pytest.raises(ConnectionError, match="institution network"):
+            main.get_token("test-user", "test-password")
+
+
+def test_create_session_adds_authorization_header():
+    mcms_session = session()
+
+    assert mcms_session.session.headers["Authorization"] == "Bearer test-token"
+    assert mcms_session.log == ["Session created for user test-user"]
+
+
+def test_get_animal_uses_each_supported_lookup():
+    mcms_session = session()
+    mcms_session.session = Mock()
+    mcms_session.session.get.return_value = response(body=TEST_ANIMAL)
+
+    assert mcms_session.get_animal(animal_id=TEST_ANIMAL["id"]) == TEST_ANIMAL
+    mcms_session.session.get.assert_called_with(
+        "https://crick.mcms-pro.com/api/animals/1848463"
+    )
+
+    assert mcms_session.get_animal(name=TEST_ANIMAL["name"]) == TEST_ANIMAL
+    mcms_session.session.get.assert_called_with(
+        "https://crick.mcms-pro.com/api/animals/name/BRAC7449.2a"
+    )
+
+    assert mcms_session.get_animal(barcode=TEST_ANIMAL["barcode"]) == TEST_ANIMAL
+    mcms_session.session.get.assert_called_with(
+        "https://crick.mcms-pro.com/api/animals/barcode/M01848463"
+    )
+
+
+def test_get_animal_validates_lookup_arguments():
+    mcms_session = session()
+    mcms_session.session = Mock()
+    mcms_session.session.get.return_value = response(body=TEST_ANIMAL)
+
+    with pytest.raises(main.MCMSError, match="does not match name"):
+        mcms_session.get_animal(animal_id=TEST_ANIMAL["id"], name="wrong name")
+
+    with pytest.raises(ValueError, match="At least one"):
+        mcms_session.get_animal()
+
+
+def test_get_procedures_uses_supported_requests():
+    mcms_session = session()
+    mcms_session.session = Mock()
+    mcms_session.session.get.return_value = response(body=[{"id": 1}])
+    mcms_session.session.post.return_value = response(body=[{"id": 2}])
+
+    assert mcms_session.get_procedures(animal_id=TEST_ANIMAL["id"]) == [{"id": 1}]
+    mcms_session.session.get.assert_called_once_with(
+        "https://crick.mcms-pro.com/api/animalprocedures/animal/1848463"
+    )
+
+    assert mcms_session.get_procedures(animal_names=["first", "second"]) == [{"id": 2}]
+    mcms_session.session.post.assert_called_once_with(
+        "https://crick.mcms-pro.com/api/animalprocedures",
+        data=b"first,second",
+        headers={"Content-Type": "text/plain"},
+    )
+
+
+def test_get_procedures_requires_exactly_one_lookup_method():
+    mcms_session = session()
+
+    with pytest.raises(ValueError, match="Only one"):
+        mcms_session.get_procedures(animal_id=1, animal_names=["test"])
+
+    with pytest.raises(ValueError, match="At least one"):
+        mcms_session.get_procedures()
+
+
+def test_handle_error_maps_known_status_codes():
+    with pytest.raises(main.MCMSError, match="does not exist"):
+        main.handle_error(
+            response(status_code=400, url="https://mcms.test/animals/unknown")
+        )
+
     with pytest.raises(InvalidURL):
-        mcms_sess.get_animal(name="wrongid")
-    with pytest.raises(InvalidURL):
-        mcms_sess.get_animal(barcode="wrongbarcode")
+        main.handle_error(response(status_code=404, content=b"not found"))
 
 
-def test_get_procedures():
-    mcms_sess = main.McmsSession(username=USER, password=PASSWORD)
-    procbyid = mcms_sess.get_procedures(animal_id=TEST_ANIMAL["id"])
-    proc = mcms_sess.get_procedures(animal_names=TEST_ANIMAL["name"])
-    assert len(procbyid) == len(proc)
-    assert all([p in proc for p in procbyid])
-    assert len(proc) > 0
-    assert all([p["animal"]["name"] == TEST_ANIMAL["name"] for p in proc])
-    multi_proc = mcms_sess.get_procedures(animal_names=TEST_ANIMAL_LIST)
-    assert len(proc) > 0
-    animal_names = [p["animal"]["name"] for p in multi_proc]
-    assert all([animal in TEST_ANIMAL_LIST for animal in animal_names])
-    assert all([animal in animal_names for animal in TEST_ANIMAL_LIST])
-    rep = mcms_sess.get_procedures(animal_names="wrongname")
-    assert not rep
-    with pytest.raises(main.MCMSError):
-        rep = mcms_sess.get_procedures(animal_id="wrongid")
+def test_parse_error_accepts_bytes_and_text():
+    message = (
+        "type: validation\nmessage: Invalid value\ndescription: Name is required\n"
+    )
+    expected = {
+        "type": "validation",
+        "message": "Invalid value",
+        "description": "Name is required",
+    }
+
+    assert main.parse_error(message) == expected
+    assert main.parse_error(message.encode()) == expected
