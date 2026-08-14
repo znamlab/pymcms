@@ -1,6 +1,6 @@
 [project]
 name = "pymcms"
-version = "0.3.0"
+dynamic = ["version"]
 authors = [{ name = "Antonin Blot", email = "antonin.blot@crick.ac.uk" }]
 description = "Python wrapper for the MCMS API"
 readme = "README.md"
@@ -28,12 +28,14 @@ Issues = "https://github.com/znamlab/pymcms/issues"
 Source = "https://github.com/znamlab/pymcms"
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=61", "setuptools-scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["pymcms*"]
 exclude = ["tests*"]
+
+[tool.setuptools_scm]
 
 [tool.pytest.ini_options]
 addopts = "--cov=pymcms --cov-report=term-missing"
