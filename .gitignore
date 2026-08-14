@@ -1,3 +1,25 @@
-*.pyc
-*.egg-info
-build
+# Python bytecode and compiled extensions
+__pycache__/
+*.py[cod]
+*.so
+
+# Distribution and build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test, coverage, and type-checker artifacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.ty/
+
+# Local environments and editor settings
+.venv/
+.python-version
+.vscode/
+.DS_Store
