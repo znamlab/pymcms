@@ -1,5 +1,8 @@
 # pymcms
 
+[![Python uv CI](https://github.com/znamlab/pymcms/actions/workflows/python-uv-ci.yml/badge.svg?branch=main)](https://github.com/znamlab/pymcms/actions/workflows/python-uv-ci.yml)
+[![Private PyPI](https://github.com/znamlab/pymcms/actions/workflows/gitlab-pypi-publish.yml/badge.svg)](https://github.com/znamlab/pymcms/actions/workflows/gitlab-pypi-publish.yml)
+
 Wrapper to interact with MCMS API
 
 API is documented there: https://crick-uat.colonymanagement.org/api/swagger-ui/index.html
